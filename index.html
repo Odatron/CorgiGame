@@ -26,13 +26,17 @@
     const barkSound = new Audio("bark.mp3");
     barkSound.volume = 0.5;
 
-    // Global AudioContext for jump sound
+    // Robust AudioContext for boing (jump)
     let jumpAudioCtx;
+    let lastBoingTime = 0;
     function playJumpSound() {
+      const now = Date.now();
+      if (now - lastBoingTime < 100) return; // prevent spamming/freezing
+      lastBoingTime = now;
       try {
         if (!jumpAudioCtx) jumpAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (jumpAudioCtx.state === 'suspended') jumpAudioCtx.resume();
 
-        // Create oscillator & gain
         const osc = jumpAudioCtx.createOscillator();
         osc.type = 'sine';
         osc.frequency.value = 320;
@@ -49,8 +53,15 @@
 
         osc.start();
         osc.stop(jumpAudioCtx.currentTime + 0.22);
-        osc.onended = () => osc.disconnect();
-      } catch (e) {}
+
+        osc.onended = () => {
+          osc.disconnect();
+          gain.disconnect();
+        };
+      } catch (e) {
+        // Don't freeze on audio error
+        console.log("Jump sound error:", e);
+      }
     }
 
     function drawCloud(ctx, x, y, scale=1) {
@@ -74,11 +85,13 @@
     let corgi, obstacles, bones, frameCount, score, gameOver;
     let spriteReady = false;
     let highScore = +localStorage.getItem('corgiHighScore') || 0;
+    // Rolling cloud layers
     let clouds = [
-      { x: 100, y: 45, speed: 0.2, scale: 1 },
-      { x: 340, y: 62, speed: 0.15, scale: 0.9 },
-      { x: 670, y: 35, speed: 0.22, scale: 1.2 },
-      { x: 500, y: 80, speed: 0.12, scale: 0.8 }
+      { x: 100, y: 45, speed: 0.25, scale: 1 },
+      { x: 340, y: 62, speed: 0.19, scale: 0.85 },
+      { x: 670, y: 35, speed: 0.23, scale: 1.19 },
+      { x: 500, y: 80, speed: 0.13, scale: 0.8 },
+      { x: 240, y: 30, speed: 0.18, scale: 0.93 }
     ];
 
     // Bouncy (special) bone variables
@@ -256,14 +269,15 @@
       if (frameCount % 180 === 0) bones.push(new Bone());
     }
     function updateClouds() {
-      clouds.forEach(cloud => {
+      for (let cloud of clouds) {
         cloud.x -= cloud.speed;
-        if (cloud.x < -120) {
-          cloud.x = canvas.width + 50 + Math.random() * 80;
-          cloud.y = 30 + Math.random() * 80;
+        // Rolling effect: when off screen, move to the right side
+        if (cloud.x < -160 * cloud.scale) {
+          cloud.x = canvas.width + Math.random() * 80;
+          cloud.y = 20 + Math.random() * 100;
           cloud.scale = 0.8 + Math.random() * 0.6;
         }
-      });
+      }
     }
 
     function update() {
@@ -343,12 +357,26 @@
       });
     }
 
+    function detectCollision(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + CORGI_DISPLAY_WIDTH > b.x &&
+        a.y < b.y + b.height &&
+        a.y + CORGI_DISPLAY_HEIGHT > b.y
+      );
+    }
+
     function draw() {
       if (!spriteReady) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      clouds.forEach(cloud => drawCloud(ctx, cloud.x, cloud.y, cloud.scale));
+
+      // Rolling clouds
+      for (let cloud of clouds) {
+        drawCloud(ctx, cloud.x, cloud.y, cloud.scale);
+      }
       ctx.fillStyle = '#8b4513';
       ctx.fillRect(0, groundY, canvas.width, 20);
+
       bones.forEach(b => b.draw());
       if (superBone) superBone.draw(Date.now());
       corgi.draw();
