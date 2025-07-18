@@ -14,12 +14,14 @@
   <canvas id="gameCanvas" width="800" height="200"></canvas>
   <button id="restartBtn">Play Again</button>
   <script>
-    // Correct dimensions for your new sprite sheet:
+    // Spritesheet is 3 frames horizontally, each 384x259 pixels
     const SPRITE_SHEET = "corgi_spritesheet.png";
-    const SPRITE_WIDTH = 128;
-    const SPRITE_HEIGHT = 128;
-    const RUN_FRAMES = 2;   // first 2 frames are "run"
-    const JUMP_FRAME = 2;   // 3rd frame is "jump"
+    const SPRITE_WIDTH = 384;
+    const SPRITE_HEIGHT = 259;
+    const CORGI_DISPLAY_WIDTH = 128;    // Final draw size
+    const CORGI_DISPLAY_HEIGHT = 86;
+    const RUN_FRAMES = 2;
+    const JUMP_FRAME = 2;
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -43,7 +45,7 @@
     class Corgi {
       constructor() {
         this.x = 50;
-        this.y = groundY - SPRITE_HEIGHT + 12; // adjust offset if feet aren't touching ground
+        this.y = groundY - CORGI_DISPLAY_HEIGHT;
         this.vy = 0;
         this.jumping = false;
         this.frameIndex = 0;
@@ -54,17 +56,17 @@
         const f = this.jumping ? JUMP_FRAME : this.frameIndex;
         ctx.drawImage(
           sheet,
-          f * SPRITE_WIDTH, 0,              // source x, y in spritesheet
-          SPRITE_WIDTH, SPRITE_HEIGHT,      // source w, h
-          this.x, this.y,                   // dest x, y
-          SPRITE_WIDTH, SPRITE_HEIGHT       // dest w, h
+          f * SPRITE_WIDTH, 0,
+          SPRITE_WIDTH, SPRITE_HEIGHT,
+          this.x, this.y,
+          CORGI_DISPLAY_WIDTH, CORGI_DISPLAY_HEIGHT
         );
       }
       update() {
         this.vy += gravity;
         this.y += this.vy;
-        if (this.y > groundY - SPRITE_HEIGHT + 12) { // match the offset above
-          this.y = groundY - SPRITE_HEIGHT + 12;
+        if (this.y > groundY - CORGI_DISPLAY_HEIGHT) {
+          this.y = groundY - CORGI_DISPLAY_HEIGHT;
           this.vy = 0;
           this.jumping = false;
         }
@@ -115,9 +117,9 @@
     function detectCollision(a, b) {
       return (
         a.x < b.x + b.width &&
-        a.x + SPRITE_WIDTH > b.x &&
+        a.x + CORGI_DISPLAY_WIDTH > b.x &&
         a.y < b.y + b.height &&
-        a.y + SPRITE_HEIGHT > b.y
+        a.y + CORGI_DISPLAY_HEIGHT > b.y
       );
     }
 
