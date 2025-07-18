@@ -14,9 +14,9 @@
   <canvas id="gameCanvas" width="800" height="200"></canvas>
   <button id="restartBtn">Play Again</button>
   <script>
-    // PNG sprite embedded as a Data URI
-    // (The PNG below is from your upload: 3 frames horizontally, 128x128px each, 384x128px total)
-    const SPRITE_SHEET = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAAAgCAYAAAC0hFh1AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AgUFSQoQKXhRQAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAJuSURBVHja7NwhCsQwDAJQ3/8/JWGG8+iqVQY4HtX+0uQT8XJ+nq19TFSAmmI9pMgCIaQCjLFZUVyAiGkAoyxWVFcgIhpAKMsVlRXICIaQCsXw1TqYG/o6Aa9oUAPqVb1aMPjM1kQ4oIUv5C0CIpGBQ8yoAhZgMhCwBYpi5Rf1IAIpoLJKI6/FwFh1TMiTUBTm7y8T9yAguCkAIpoDqNYfJIMOKACWAwAJZYCB0CTOeGwQJYo0MW4w2RxTm6l7AMJlkuQUc2YYGQwTTkDi8BIMkDPtwEguCD3Z5AUnUASDJAyTnYDJGFAODegzO/ff2ALILh1TMiTIAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDI1LTA3LTE3VDE4OjQwOjI4KzAwOjAwOr66WwAAACV0RVh0ZGF0ZTptb2RpZnkAMjAyNS0wNy0xN1QxODo0MDoyOCswMDowMDej05EAAAAASUVORK5CYII=";
+    // Use the PNG sprite file from the same folder as index.html
+    // Make sure your PNG is called exactly: corgi_spritesheet.png
+    const SPRITE_SHEET = "corgi_spritesheet.png";
     const SPRITE_WIDTH = 128;
     const SPRITE_HEIGHT = 128;
     const RUN_FRAMES = 2;
@@ -37,7 +37,7 @@
     };
     sheet.onerror = () => {
       spriteReady = false;
-      alert('Sprite failed to load.');
+      alert('Sprite failed to load. Make sure the file is named corgi_spritesheet.png and in the same folder as this HTML file.');
     };
     sheet.src = SPRITE_SHEET;
 
