@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Corgi Runner</title>
   <style>
-    body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #87ceeb; }
+    body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #93cfff; }
     canvas { border: 2px solid #333; background: #fff; }
     #restartBtn { margin-top: 10px; padding: 10px 20px; font-size: 16px; display: none; }
   </style>
@@ -14,25 +14,24 @@
   <canvas id="gameCanvas" width="800" height="200"></canvas>
   <button id="restartBtn">Play Again</button>
   <script>
-    // Sprite info
-    const SPRITE_SHEET = "corgi_spritesheet.png";
-    const SPRITE_WIDTH = 384;    // Each frame width
-    const SPRITE_HEIGHT = 259;   // Each frame height
-    const RUN_FRAMES = 2;        // 0 and 1
-    const JUMP_FRAME = 2;        // 2 is jump frame
+    // ---- SPRITE CONFIG ----
+    const SPRITE_SHEET = "corgi_spritesheet.png"; // Your working PNG file
+    const SPRITE_WIDTH = 340;   // Adjust this if needed for your sprite
+    const SPRITE_HEIGHT = 230;  // Adjust if needed for your sprite
+    const RUN_FRAMES = 2;
+    const JUMP_FRAME = 2;
 
-    // How big you want the corgi on the canvas (feel free to adjust!)
-    const CORGI_DISPLAY_WIDTH = 96;   // Draw at 1/4 sprite size
-    const CORGI_DISPLAY_HEIGHT = 65;  // 259/4 rounded
-
+    // ---- GAME VARIABLES ----
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const restartBtn = document.getElementById('restartBtn');
     const groundY = canvas.height - 20;
     const gravity = 0.5;
-    let corgi, obstacles, frameCount, score, gameOver;
+    let corgi, obstacles, frameCount, score, gameOver, bones, highScore = 0;
     let spriteReady = false;
+    let clouds = [];
 
+    // ---- LOAD SPRITE ----
     const sheet = new Image();
     sheet.onload = () => {
       spriteReady = true;
@@ -44,10 +43,45 @@
     };
     sheet.src = SPRITE_SHEET;
 
+    // ---- CLOUDS ----
+    class Cloud {
+      constructor() {
+        this.x = canvas.width + Math.random() * 200;
+        this.y = 40 + Math.random() * 80;
+        this.size = 50 + Math.random() * 40;
+        this.speed = 1.2 + Math.random() * 1.8;
+        this.opacity = 0.6 + Math.random() * 0.3;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y, this.size, this.size * 0.5, 0, 0, 2 * Math.PI);
+        ctx.ellipse(this.x - this.size * 0.5, this.y + 8, this.size * 0.5, this.size * 0.32, 0, 0, 2 * Math.PI);
+        ctx.ellipse(this.x + this.size * 0.4, this.y + 7, this.size * 0.32, this.size * 0.2, 0, 0, 2 * Math.PI);
+        ctx.ellipse(this.x + this.size * 0.2, this.y - 12, this.size * 0.2, this.size * 0.18, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+      }
+      update() {
+        this.x -= this.speed;
+        if (this.x < -this.size * 1.2) {
+          this.x = canvas.width + Math.random() * 200;
+          this.y = 40 + Math.random() * 80;
+          this.size = 50 + Math.random() * 40;
+          this.speed = 1.2 + Math.random() * 1.8;
+          this.opacity = 0.6 + Math.random() * 0.3;
+        }
+      }
+    }
+
+    // ---- CORGI CLASS ----
     class Corgi {
       constructor() {
         this.x = 50;
-        this.y = groundY - CORGI_DISPLAY_HEIGHT;
+        this.y = groundY - SPRITE_HEIGHT;
         this.vy = 0;
         this.jumping = false;
         this.frameIndex = 0;
@@ -58,17 +92,17 @@
         const f = this.jumping ? JUMP_FRAME : this.frameIndex;
         ctx.drawImage(
           sheet,
-          f * SPRITE_WIDTH, 0,    // Source x, y
-          SPRITE_WIDTH, SPRITE_HEIGHT, // Source width, height
-          this.x, this.y,          // Dest x, y
-          CORGI_DISPLAY_WIDTH, CORGI_DISPLAY_HEIGHT // Dest width, height
+          f * SPRITE_WIDTH, 0,
+          SPRITE_WIDTH, SPRITE_HEIGHT,
+          this.x, this.y,
+          SPRITE_WIDTH, SPRITE_HEIGHT
         );
       }
       update() {
         this.vy += gravity;
         this.y += this.vy;
-        if (this.y > groundY - CORGI_DISPLAY_HEIGHT) {
-          this.y = groundY - CORGI_DISPLAY_HEIGHT;
+        if (this.y > groundY - SPRITE_HEIGHT) {
+          this.y = groundY - SPRITE_HEIGHT;
           this.vy = 0;
           this.jumping = false;
         }
@@ -84,44 +118,95 @@
       }
     }
 
+    // ---- OBSTACLE ----
     class Obstacle {
       constructor() {
-        this.width = 30;
-        this.height = 70;
+        this.width = 30 + Math.random() * 20;
+        this.height = 50 + Math.random() * 40;
         this.x = canvas.width;
         this.y = groundY - this.height;
-        this.speed = 5;
+        this.speed = 5 + Math.random() * 2;
       }
       draw() {
         ctx.fillStyle = '#228b22';
         ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.fillStyle = "#176317";
+        ctx.fillRect(this.x, this.y + this.height - 8, this.width, 8); // shadow
       }
       update() {
         this.x -= this.speed;
       }
     }
 
+    // ---- BONE COLLECTIBLE ----
+    class Bone {
+      constructor() {
+        this.x = canvas.width + Math.random() * 150;
+        this.y = groundY - 55 - Math.random() * 40;
+        this.size = 22;
+        this.speed = 5.2;
+        this.collected = false;
+      }
+      draw() {
+        if (this.collected) return;
+        // Bone shape (cartoon style)
+        ctx.save();
+        ctx.fillStyle = "#fbe7b0";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size / 3, 0, 2 * Math.PI);
+        ctx.arc(this.x + this.size / 2, this.y, this.size / 3, 0, 2 * Math.PI);
+        ctx.rect(this.x - this.size / 6, this.y - this.size / 4, this.size * 0.6, this.size / 2);
+        ctx.fill();
+        ctx.strokeStyle = "#b3a06a";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+      update() {
+        this.x -= this.speed;
+      }
+    }
+
+    // ---- GAME INIT ----
     function initGame() {
       if (!spriteReady) return;
       corgi = new Corgi();
       obstacles = [];
+      bones = [];
       frameCount = 0;
       score = 0;
       gameOver = false;
+      // Clouds
+      clouds = [];
+      for (let i = 0; i < 6; i++) clouds.push(new Cloud());
       restartBtn.style.display = 'none';
       requestAnimationFrame(loop);
     }
 
     function spawnObstacle() {
-      if (frameCount % 120 === 0) obstacles.push(new Obstacle());
+      if (frameCount % 85 === 0) obstacles.push(new Obstacle());
+    }
+
+    function spawnBone() {
+      if (frameCount % 180 === 0) bones.push(new Bone());
     }
 
     function detectCollision(a, b) {
       return (
         a.x < b.x + b.width &&
-        a.x + CORGI_DISPLAY_WIDTH > b.x &&
+        a.x + SPRITE_WIDTH > b.x &&
         a.y < b.y + b.height &&
-        a.y + CORGI_DISPLAY_HEIGHT > b.y
+        a.y + SPRITE_HEIGHT > b.y
+      );
+    }
+
+    function detectBoneCollision(corgi, bone) {
+      return (
+        !bone.collected &&
+        corgi.x < bone.x + bone.size &&
+        corgi.x + SPRITE_WIDTH > bone.x &&
+        corgi.y < bone.y + bone.size &&
+        corgi.y + SPRITE_HEIGHT > bone.y
       );
     }
 
@@ -130,10 +215,26 @@
       frameCount++;
       corgi.update();
       spawnObstacle();
+      spawnBone();
+      // Update clouds
+      clouds.forEach(cloud => cloud.update());
+      // Bones
+      bones.forEach((bone, i) => {
+        bone.update();
+        if (detectBoneCollision(corgi, bone)) {
+          bone.collected = true;
+          score += 3; // Bones are worth extra!
+        }
+        if (bone.x < -bone.size || bone.collected) {
+          bones.splice(i, 1);
+        }
+      });
+      // Obstacles
       obstacles.forEach((obs, i) => {
         obs.update();
         if (!gameOver && detectCollision(corgi, obs)) {
           gameOver = true;
+          highScore = Math.max(score, highScore);
           restartBtn.style.display = 'inline-block';
         }
         if (obs.x + obs.width < 0) {
@@ -143,25 +244,46 @@
       });
     }
 
+    // ---- DRAWING ----
     function draw() {
       if (!spriteReady) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Sky
+      ctx.fillStyle = "#93cfff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Clouds
+      clouds.forEach(cloud => {
+        cloud.draw();
+      });
+
+      // Ground
       ctx.fillStyle = '#8b4513';
       ctx.fillRect(0, groundY, canvas.width, 20);
+
+      // Bones, player, obstacles
+      bones.forEach(b => b.draw());
       corgi.draw();
       obstacles.forEach(o => o.draw());
+
+      // Score and high score
       ctx.fillStyle = '#000';
       ctx.font = '20px Arial';
       ctx.fillText('Score: ' + score, 650, 30);
+      ctx.fillText('High: ' + (highScore || 0), 520, 30);
+
       if (gameOver) {
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#fff';
         ctx.font = '40px Arial';
-        ctx.fillText('Game Over', canvas.width/2 - 100, canvas.height/2);
+        ctx.fillText('Game Over', canvas.width / 2 - 100, canvas.height / 2);
+        ctx.font = '24px Arial';
+        ctx.fillText('Press Play Again', canvas.width / 2 - 85, canvas.height / 2 + 40);
       }
     }
 
+    // ---- MAIN LOOP ----
     function loop() {
       update();
       draw();
@@ -173,6 +295,7 @@
     });
 
     restartBtn.addEventListener('click', initGame);
+
   </script>
 </body>
 </html>
