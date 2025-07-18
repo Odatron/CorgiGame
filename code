@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Corgi Runner</title>
+  <style>
+    body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #87ceeb; }
+    canvas { border: 2px solid #333; background: #fff; }
+    #restartBtn { margin-top: 10px; padding: 10px 20px; font-size: 16px; display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="200"></canvas>
+  <button id="restartBtn">Play Again</button>
+  <script>
+    // PNG sprite embedded as a Data URI
+    // (The PNG below is from your upload: 3 frames horizontally, 128x128px each, 384x128px total)
+    const SPRITE_SHEET = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAAAgCAYAAAC0hFh1AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AgUFSQoQKXhRQAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAJuSURBVHja7NwhCsQwDAJQ3/8/JWGG8+iqVQY4HtX+0uQT8XJ+nq19TFSAmmI9pMgCIaQCjLFZUVyAiGkAoyxWVFcgIhpAKMsVlRXICIaQCsXw1TqYG/o6Aa9oUAPqVb1aMPjM1kQ4oIUv5C0CIpGBQ8yoAhZgMhCwBYpi5Rf1IAIpoLJKI6/FwFh1TMiTUBTm7y8T9yAguCkAIpoDqNYfJIMOKACWAwAJZYCB0CTOeGwQJYo0MW4w2RxTm6l7AMJlkuQUc2YYGQwTTkDi8BIMkDPtwEguCD3Z5AUnUASDJAyTnYDJGFAODegzO/ff2ALILh1TMiTIAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDI1LTA3LTE3VDE4OjQwOjI4KzAwOjAwOr66WwAAACV0RVh0ZGF0ZTptb2RpZnkAMjAyNS0wNy0xN1QxODo0MDoyOCswMDowMDej05EAAAAASUVORK5CYII=";
+    const SPRITE_WIDTH = 128;
+    const SPRITE_HEIGHT = 128;
+    const RUN_FRAMES = 2;
+    const JUMP_FRAME = 2;
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const restartBtn = document.getElementById('restartBtn');
+    const groundY = canvas.height - 20;
+    const gravity = 0.5;
+    let corgi, obstacles, frameCount, score, gameOver;
+    let spriteReady = false;
+
+    const sheet = new Image();
+    sheet.onload = () => {
+      spriteReady = true;
+      initGame();
+    };
+    sheet.onerror = () => {
+      spriteReady = false;
+      alert('Sprite failed to load.');
+    };
+    sheet.src = SPRITE_SHEET;
+
+    class Corgi {
+      constructor() {
+        this.x = 50;
+        this.y = groundY - SPRITE_HEIGHT;
+        this.vy = 0;
+        this.jumping = false;
+        this.frameIndex = 0;
+        this.frameSpeed = 6;
+      }
+      draw() {
+        if (!spriteReady) return;
+        const f = this.jumping ? JUMP_FRAME : this.frameIndex;
+        ctx.drawImage(
+          sheet,
+          f * SPRITE_WIDTH, 0,
+          SPRITE_WIDTH, SPRITE_HEIGHT,
+          this.x, this.y,
+          SPRITE_WIDTH, SPRITE_HEIGHT
+        );
+      }
+      update() {
+        this.vy += gravity;
+        this.y += this.vy;
+        if (this.y > groundY - SPRITE_HEIGHT) {
+          this.y = groundY - SPRITE_HEIGHT;
+          this.vy = 0;
+          this.jumping = false;
+        }
+        if (!this.jumping && frameCount % this.frameSpeed === 0) {
+          this.frameIndex = (this.frameIndex + 1) % RUN_FRAMES;
+        }
+      }
+      jump() {
+        if (!this.jumping) {
+          this.vy = -12;
+          this.jumping = true;
+        }
+      }
+    }
+
+    class Obstacle {
+      constructor() {
+        this.width = 30;
+        this.height = 70;
+        this.x = canvas.width;
+        this.y = groundY - this.height;
+        this.speed = 5;
+      }
+      draw() {
+        ctx.fillStyle = '#228b22';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
+      update() {
+        this.x -= this.speed;
+      }
+    }
+
+    function initGame() {
+      if (!spriteReady) return;
+      corgi = new Corgi();
+      obstacles = [];
+      frameCount = 0;
+      score = 0;
+      gameOver = false;
+      restartBtn.style.display = 'none';
+      requestAnimationFrame(loop);
+    }
+
+    function spawnObstacle() {
+      if (frameCount % 120 === 0) obstacles.push(new Obstacle());
+    }
+
+    function detectCollision(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + SPRITE_WIDTH > b.x &&
+        a.y < b.y + b.height &&
+        a.y + SPRITE_HEIGHT > b.y
+      );
+    }
+
+    function update() {
+      if (!spriteReady) return;
+      frameCount++;
+      corgi.update();
+      spawnObstacle();
+      obstacles.forEach((obs, i) => {
+        obs.update();
+        if (!gameOver && detectCollision(corgi, obs)) {
+          gameOver = true;
+          restartBtn.style.display = 'inline-block';
+        }
+        if (obs.x + obs.width < 0) {
+          obstacles.splice(i, 1);
+          if (!gameOver) score++;
+        }
+      });
+    }
+
+    function draw() {
+      if (!spriteReady) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#8b4513';
+      ctx.fillRect(0, groundY, canvas.width, 20);
+      corgi.draw();
+      obstacles.forEach(o => o.draw());
+      ctx.fillStyle = '#000';
+      ctx.font = '20px Arial';
+      ctx.fillText('Score: ' + score, 650, 30);
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = '40px Arial';
+        ctx.fillText('Game Over', canvas.width/2 - 100, canvas.height/2);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (!gameOver && spriteReady) requestAnimationFrame(loop);
+    }
+
+    document.addEventListener('keydown', e => {
+      if (spriteReady && corgi && !gameOver && (e.code === 'Space' || e.code === 'ArrowUp')) corgi.jump();
+    });
+
+    restartBtn.addEventListener('click', initGame);
+  </script>
+</body>
+</html>
