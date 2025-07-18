@@ -14,14 +14,16 @@
   <canvas id="gameCanvas" width="800" height="200"></canvas>
   <button id="restartBtn">Play Again</button>
   <script>
-    // Spritesheet is 3 frames horizontally, each 384x259 pixels
+    // Sprite info
     const SPRITE_SHEET = "corgi_spritesheet.png";
-    const SPRITE_WIDTH = 384;
-    const SPRITE_HEIGHT = 259;
-    const CORGI_DISPLAY_WIDTH = 128;    // Final draw size
-    const CORGI_DISPLAY_HEIGHT = 86;
-    const RUN_FRAMES = 2;
-    const JUMP_FRAME = 2;
+    const SPRITE_WIDTH = 384;    // Each frame width
+    const SPRITE_HEIGHT = 259;   // Each frame height
+    const RUN_FRAMES = 2;        // 0 and 1
+    const JUMP_FRAME = 2;        // 2 is jump frame
+
+    // How big you want the corgi on the canvas (feel free to adjust!)
+    const CORGI_DISPLAY_WIDTH = 96;   // Draw at 1/4 sprite size
+    const CORGI_DISPLAY_HEIGHT = 65;  // 259/4 rounded
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -56,10 +58,10 @@
         const f = this.jumping ? JUMP_FRAME : this.frameIndex;
         ctx.drawImage(
           sheet,
-          f * SPRITE_WIDTH, 0,
-          SPRITE_WIDTH, SPRITE_HEIGHT,
-          this.x, this.y,
-          CORGI_DISPLAY_WIDTH, CORGI_DISPLAY_HEIGHT
+          f * SPRITE_WIDTH, 0,    // Source x, y
+          SPRITE_WIDTH, SPRITE_HEIGHT, // Source width, height
+          this.x, this.y,          // Dest x, y
+          CORGI_DISPLAY_WIDTH, CORGI_DISPLAY_HEIGHT // Dest width, height
         );
       }
       update() {
