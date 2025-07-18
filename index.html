@@ -26,23 +26,30 @@
     const barkSound = new Audio("bark.mp3");
     barkSound.volume = 0.5;
 
+    // Global AudioContext for jump sound
+    let jumpAudioCtx;
     function playJumpSound() {
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
+        if (!jumpAudioCtx) jumpAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create oscillator & gain
+        const osc = jumpAudioCtx.createOscillator();
         osc.type = 'sine';
         osc.frequency.value = 320;
-        const gain = ctx.createGain();
+        const gain = jumpAudioCtx.createGain();
         osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(320, ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(760, ctx.currentTime + 0.10);
-        osc.frequency.linearRampToValueAtTime(420, ctx.currentTime + 0.18);
-        gain.gain.setValueAtTime(0.13, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.20);
+        gain.connect(jumpAudioCtx.destination);
+
+        osc.frequency.setValueAtTime(320, jumpAudioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(760, jumpAudioCtx.currentTime + 0.10);
+        osc.frequency.linearRampToValueAtTime(420, jumpAudioCtx.currentTime + 0.18);
+
+        gain.gain.setValueAtTime(0.13, jumpAudioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, jumpAudioCtx.currentTime + 0.20);
+
         osc.start();
-        osc.stop(ctx.currentTime + 0.22);
-        osc.onended = () => ctx.close();
+        osc.stop(jumpAudioCtx.currentTime + 0.22);
+        osc.onended = () => osc.disconnect();
       } catch (e) {}
     }
 
@@ -183,7 +190,6 @@
         this.size = 38;
         this.x = 100 + Math.random() * (canvas.width - 160);
         this.y = 30 + Math.random() * (groundY - 80);
-        // bounce speed and direction
         this.vx = (Math.random() < 0.5 ? 1 : -1) * (2.5 + Math.random()*1.7);
         this.vy = (Math.random() < 0.5 ? 1 : -1) * (2.0 + Math.random()*1.2);
         this.blinking = false;
@@ -191,12 +197,9 @@
       }
       draw(now) {
         if (!this.visible) return;
-        // Blinking in last second
         if (this.blinking) {
-          // Blink on/off every 100ms
           if (Math.floor((now - superBoneBlinkStart) / 100) % 2 === 0) return;
         }
-        // Draw big shiny bone
         ctx.save();
         ctx.shadowColor = "#f1f1a7";
         ctx.shadowBlur = 15;
@@ -215,10 +218,8 @@
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        // Bounce off left/right walls
         if (this.x < 5) { this.x = 5; this.vx *= -1; }
         if (this.x > canvas.width - this.size - 5) { this.x = canvas.width - this.size - 5; this.vx *= -1; }
-        // Bounce off top/ground
         if (this.y < 5) { this.y = 5; this.vy *= -1; }
         if (this.y > groundY - this.size + 6) { this.y = groundY - this.size + 6; this.vy *= -1; }
       }
@@ -345,7 +346,6 @@
     function draw() {
       if (!spriteReady) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Clouds (background)
       clouds.forEach(cloud => drawCloud(ctx, cloud.x, cloud.y, cloud.scale));
       ctx.fillStyle = '#8b4513';
       ctx.fillRect(0, groundY, canvas.width, 20);
