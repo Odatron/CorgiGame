@@ -14,7 +14,7 @@
   <canvas id="gameCanvas" width="800" height="200"></canvas>
   <button id="restartBtn">Play Again</button>
   <script>
-    // --- CONSTANTS & SOUND ---
+    // --- CONSTANTS ---
     const SPRITE_SHEET = "corgi_spritesheet.png";
     const SPRITE_WIDTH = 384;
     const SPRITE_HEIGHT = 259;
@@ -26,54 +26,193 @@
     const barkSound = new Audio("bark.mp3");
     barkSound.volume = 0.5;
 
-    // Robust AudioContext for boing (jump)
+    // Jump (boing) sound
     let jumpAudioCtx;
-    let lastBoingTime = 0;
     function playJumpSound() {
-      const now = Date.now();
-      if (now - lastBoingTime < 100) return; // prevent spamming/freezing
-      lastBoingTime = now;
       try {
         if (!jumpAudioCtx) jumpAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (jumpAudioCtx.state === 'suspended') jumpAudioCtx.resume();
-
         const osc = jumpAudioCtx.createOscillator();
         osc.type = 'sine';
         osc.frequency.value = 320;
         const gain = jumpAudioCtx.createGain();
         osc.connect(gain);
         gain.connect(jumpAudioCtx.destination);
-
         osc.frequency.setValueAtTime(320, jumpAudioCtx.currentTime);
         osc.frequency.linearRampToValueAtTime(760, jumpAudioCtx.currentTime + 0.10);
         osc.frequency.linearRampToValueAtTime(420, jumpAudioCtx.currentTime + 0.18);
-
         gain.gain.setValueAtTime(0.13, jumpAudioCtx.currentTime);
         gain.gain.linearRampToValueAtTime(0, jumpAudioCtx.currentTime + 0.20);
-
         osc.start();
         osc.stop(jumpAudioCtx.currentTime + 0.22);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      } catch (e) {}
+    }
 
-        osc.onended = () => {
-          osc.disconnect();
-          gain.disconnect();
-        };
-      } catch (e) {
-        // Don't freeze on audio error
-        console.log("Jump sound error:", e);
+    // --- TIME OF DAY THEMES ---
+    const BG_THEMES = [
+      // DAY
+      {
+        sky: "#b7e5ff", hills: "#a5c892", distant: "#b7d5e8", trees: "#629d59", grass: "#396d31"
+      },
+      // SUNSET
+      {
+        sky: "#fdba74", hills: "#fbc687", distant: "#f5deb3", trees: "#e1a751", grass: "#b17927"
+      },
+      // NIGHT
+      {
+        sky: "#313B64", hills: "#587170", distant: "#9cb4c0", trees: "#2f3c36", grass: "#3e5b4b"
+      },
+      // DAWN
+      {
+        sky: "#afc6e9", hills: "#b6a7cb", distant: "#c3ccf9", trees: "#8586a4", grass: "#a7b3bb"
+      }
+    ];
+    let currentThemeIdx = 0, nextThemeIdx = 1;
+    let themeBlend = 0; // 0=only current, 1=only next
+    let themeChangeStart = 0;
+    const THEME_LENGTH = 20000; // 20 seconds per theme
+    const THEME_FADE = 2800;    // 2.8 seconds fade between themes
+    let lastThemeSwitch = Date.now();
+
+    function lerpColor(a, b, t) {
+      // Hex string to [r,g,b]
+      function hexToRgb(h) {
+        h = h.replace('#','');
+        if (h.length === 3) h = h.split('').map(c=>c+c).join('');
+        return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)];
+      }
+      const ra = hexToRgb(a), rb = hexToRgb(b);
+      const r = Math.round(ra[0] + (rb[0]-ra[0])*t);
+      const g = Math.round(ra[1] + (rb[1]-ra[1])*t);
+      const bval = Math.round(ra[2] + (rb[2]-ra[2])*t);
+      return `rgb(${r},${g},${bval})`;
+    }
+    function blendTheme(a, b, t) {
+      return {
+        sky: lerpColor(a.sky, b.sky, t),
+        hills: lerpColor(a.hills, b.hills, t),
+        distant: lerpColor(a.distant, b.distant, t),
+        trees: lerpColor(a.trees, b.trees, t),
+        grass: lerpColor(a.grass, b.grass, t)
+      };
+    }
+
+    // --- PRETTY NATURAL BACKGROUND ---
+    const bgLayers = [
+      { // Distant hills
+        speed: 0.12,
+        draw: function(ctx, xOffset, theme) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(-100 + xOffset, 170);
+          ctx.bezierCurveTo(100 + xOffset, 120, 220 + xOffset, 190, 320 + xOffset, 170);
+          ctx.bezierCurveTo(420 + xOffset, 160, 520 + xOffset, 125, 720 + xOffset, 175);
+          ctx.lineTo(900 + xOffset, 200);
+          ctx.lineTo(-100 + xOffset, 200);
+          ctx.closePath();
+          ctx.fillStyle = theme.distant;
+          ctx.globalAlpha = 0.8;
+          ctx.fill();
+          ctx.restore();
+        }
+      },
+      { // Soft green hills
+        speed: 0.22,
+        draw: function(ctx, xOffset, theme) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(-60 + xOffset, 160);
+          ctx.bezierCurveTo(100 + xOffset, 150, 180 + xOffset, 175, 320 + xOffset, 158);
+          ctx.bezierCurveTo(420 + xOffset, 130, 650 + xOffset, 170, 900 + xOffset, 160);
+          ctx.lineTo(900 + xOffset, 200);
+          ctx.lineTo(-100 + xOffset, 200);
+          ctx.closePath();
+          ctx.fillStyle = theme.hills;
+          ctx.globalAlpha = 0.9;
+          ctx.fill();
+          ctx.restore();
+        }
+      },
+      { // Tree silhouettes
+        speed: 0.36,
+        draw: function(ctx, xOffset, theme) {
+          ctx.save();
+          ctx.globalAlpha = 0.8;
+          for (let i = 0; i < 7; i++) {
+            let x = (i * 120 + xOffset) % 900 - 60;
+            ctx.beginPath();
+            ctx.arc(x, 140 + (i%2)*10, 13 + (i%3)*4, 0, Math.PI*2);
+            ctx.fillStyle = theme.trees;
+            ctx.fill();
+            ctx.fillRect(x - 3, 151 + (i%2)*10, 6, 15);
+          }
+          ctx.restore();
+        }
+      },
+      { // Foreground bushy grass
+        speed: 0.72,
+        draw: function(ctx, xOffset, theme) {
+          ctx.save();
+          ctx.globalAlpha = 0.85;
+          for (let i = 0; i < 14; i++) {
+            let x = (i * 64 + xOffset) % 900 - 60;
+            ctx.beginPath();
+            ctx.arc(x, 190, 16 + (i%3)*3, Math.PI, 2*Math.PI);
+            ctx.fillStyle = theme.grass;
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+    ];
+    let bgOffsets = [0, 0, 0, 0];
+
+    function updateBackground() {
+      for (let i = 0; i < bgLayers.length; i++) {
+        bgOffsets[i] -= bgLayers[i].speed;
+        if (bgOffsets[i] < -900) bgOffsets[i] += 900;
+      }
+    }
+    function drawBackground(ctx, theme) {
+      ctx.save();
+      ctx.fillStyle = theme.sky;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      for (let i = 0; i < bgLayers.length; i++) {
+        bgLayers[i].draw(ctx, bgOffsets[i], theme);
+        bgLayers[i].draw(ctx, bgOffsets[i] + 900, theme);
       }
     }
 
-    function drawCloud(ctx, x, y, scale=1) {
+    // --- CLOUDS ---
+    function drawCloud(ctx, x, y, scale=1, color="#fff") {
       ctx.save();
-      ctx.globalAlpha = 0.75;
-      ctx.fillStyle = "#fff";
+      ctx.globalAlpha = 0.76;
+      ctx.fillStyle = color;
       ctx.beginPath();
       ctx.ellipse(x, y, 36*scale, 18*scale, 0, 0, Math.PI*2);
       ctx.ellipse(x+22*scale, y+7*scale, 30*scale, 13*scale, 0, 0, Math.PI*2);
       ctx.ellipse(x-22*scale, y+7*scale, 24*scale, 10*scale, 0, 0, Math.PI*2);
       ctx.fill();
       ctx.restore();
+    }
+
+    let clouds = [
+      { x: 100, y: 45, speed: 0.21, scale: 1 },
+      { x: 340, y: 62, speed: 0.17, scale: 0.9 },
+      { x: 670, y: 35, speed: 0.22, scale: 1.1 },
+      { x: 500, y: 80, speed: 0.13, scale: 0.8 }
+    ];
+    function updateClouds() {
+      for (let cloud of clouds) {
+        cloud.x -= cloud.speed;
+        if (cloud.x < -160 * cloud.scale) {
+          cloud.x = 800 + Math.random() * 80;
+          cloud.y = 20 + Math.random() * 100;
+          cloud.scale = 0.8 + Math.random() * 0.6;
+        }
+      }
     }
 
     // --- GAME VARIABLES ---
@@ -85,15 +224,6 @@
     let corgi, obstacles, bones, frameCount, score, gameOver;
     let spriteReady = false;
     let highScore = +localStorage.getItem('corgiHighScore') || 0;
-    // Rolling cloud layers
-    let clouds = [
-      { x: 100, y: 45, speed: 0.25, scale: 1 },
-      { x: 340, y: 62, speed: 0.19, scale: 0.85 },
-      { x: 670, y: 35, speed: 0.23, scale: 1.19 },
-      { x: 500, y: 80, speed: 0.13, scale: 0.8 },
-      { x: 240, y: 30, speed: 0.18, scale: 0.93 }
-    ];
-
     // Bouncy (special) bone variables
     let superBone = null;
     let superBoneStart = 0;
@@ -258,6 +388,11 @@
       superBone = null;
       superBoneCollected = false;
       superBoneBlinkStart = 0;
+      lastThemeSwitch = Date.now();
+      themeBlend = 0;
+      currentThemeIdx = 0;
+      nextThemeIdx = 1;
+      bgOffsets = [0, 0, 0, 0];
       restartBtn.style.display = 'none';
       requestAnimationFrame(loop);
     }
@@ -268,25 +403,30 @@
     function spawnBone() {
       if (frameCount % 180 === 0) bones.push(new Bone());
     }
-    function updateClouds() {
-      for (let cloud of clouds) {
-        cloud.x -= cloud.speed;
-        // Rolling effect: when off screen, move to the right side
-        if (cloud.x < -160 * cloud.scale) {
-          cloud.x = canvas.width + Math.random() * 80;
-          cloud.y = 20 + Math.random() * 100;
-          cloud.scale = 0.8 + Math.random() * 0.6;
-        }
-      }
-    }
 
     function update() {
       if (!spriteReady) return;
       frameCount++;
       corgi.update();
       updateClouds();
+      updateBackground();
       spawnObstacle();
       spawnBone();
+
+      // --- THEME HANDLING ---
+      let now = Date.now();
+      let dt = now - lastThemeSwitch;
+      if (dt > THEME_LENGTH) {
+        themeBlend = (dt - THEME_LENGTH) / THEME_FADE;
+        if (themeBlend >= 1) {
+          currentThemeIdx = nextThemeIdx;
+          nextThemeIdx = (currentThemeIdx + 1) % BG_THEMES.length;
+          lastThemeSwitch = now;
+          themeBlend = 0;
+        }
+      } else {
+        themeBlend = 0;
+      }
 
       // Normal bones
       bones.forEach((bone, i) => {
@@ -311,7 +451,6 @@
       });
 
       // Super bone logic
-      let now = Date.now();
       if (score >= 10 && !superBone && !superBoneCollected && !gameOver) {
         superBone = new SuperBone();
         superBoneStart = now;
@@ -344,6 +483,7 @@
         obs.update();
         if (!gameOver && detectCollision(corgi, obs)) {
           gameOver = true;
+          let highScore = +localStorage.getItem('corgiHighScore') || 0;
           if (score > highScore) {
             highScore = score;
             localStorage.setItem('corgiHighScore', highScore);
@@ -368,19 +508,30 @@
 
     function draw() {
       if (!spriteReady) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Rolling clouds
-      for (let cloud of clouds) {
-        drawCloud(ctx, cloud.x, cloud.y, cloud.scale);
+      // Blend current and next theme if fading
+      let theme;
+      if (themeBlend > 0) {
+        theme = blendTheme(BG_THEMES[currentThemeIdx], BG_THEMES[nextThemeIdx], themeBlend);
+      } else {
+        theme = BG_THEMES[currentThemeIdx];
       }
+
+      // --- DRAW LAYERS ---
+      drawBackground(ctx, theme);
+      for (let cloud of clouds) drawCloud(ctx, cloud.x, cloud.y, cloud.scale);
+
+      // Ground (over foreground grass)
       ctx.fillStyle = '#8b4513';
       ctx.fillRect(0, groundY, canvas.width, 20);
 
+      // Collectables, player, obstacles
       bones.forEach(b => b.draw());
       if (superBone) superBone.draw(Date.now());
       corgi.draw();
       obstacles.forEach(o => o.draw());
+
+      // Score, UI
+      let highScore = +localStorage.getItem('corgiHighScore') || 0;
       ctx.fillStyle = '#000';
       ctx.font = '20px Arial';
       ctx.fillText('Score: ' + score, 650, 30);
